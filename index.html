@@ -239,6 +239,18 @@ body{
 </head>
 <body>
 
+<div id="gate">
+  <div class="g-box">
+    <div class="g-en">A Little Secret</div>
+    <div class="g-cn">这里藏着我们的日子</div>
+    <input id="g-in" inputmode="numeric" autocomplete="off" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
+    <button id="g-btn">进 入</button>
+    <div class="g-hint" id="g-hint">八位数字 · 只属于我们俩</div>
+  </div>
+</div>
+<script>/* 已解锁会话: 首屏前就藏起密码门, 不等 6.5MB 解析完 */
+try { if (sessionStorage.getItem('lt-gate') === '1') { var _g = document.getElementById('gate'); if (_g) _g.style.display = 'none'; } } catch (e) {}</script>
+
 <div class="eyebrow">To Li Tong &middot; With All My Love</div>
 
 <div class="heart-stage">
@@ -405,16 +417,6 @@ body{
 </div>
 
 <div id="night"></div>
-<div id="gate">
-  <div class="g-box">
-    <div class="g-en">A Little Secret</div>
-    <div class="g-cn">这里藏着我们的日子</div>
-    <input id="g-in" inputmode="numeric" autocomplete="off" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
-    <button id="g-btn">进 入</button>
-    <div class="g-hint" id="g-hint">八位数字 · 只属于我们俩</div>
-  </div>
-</div>
-
 <canvas id="fw"></canvas>
 <div id="veil">
   <div class="v-text">
@@ -471,9 +473,9 @@ function sha256(ascii) {                    // 紧凑实现, 纯同步, 任何�
   words[words.length] = (bitLen);
   for (j = 0; j < words.length;) {
     var w = words.slice(j, j += 16), oldHash = hash;
-    hash = words.slice(0, 8);
+    hash = hash.slice(0, 8);
     for (i = 0; i < 64; i++) {
-      var i15 = i + 15, i2 = i + 2;
+      var i15 = i - 15, i2 = i - 2;
       var a = hash[0], e = hash[4];
       var t1 = hash[7] + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25))
         + ((e & hash[5]) ^ ((~e) & hash[6])) + k[i]
@@ -512,7 +514,7 @@ function tryUnlock() {
 }
 document.getElementById('g-btn').addEventListener('click', tryUnlock);
 gIn.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-if (sessionStorage.getItem('lt-gate') === '1') gate.remove();
+if (sessionStorage.getItem('lt-gate') === '1') { gate.classList.add('off'); setTimeout(() => gate.remove(), 1000); }
 
 /* ================= 倒计时 ================= */
 const qs = new URLSearchParams(location.search);
