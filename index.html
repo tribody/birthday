@@ -577,21 +577,33 @@ const SEQ = [                               // 生日快乐 · F大调, 高音�
   ['C5', .75], ['C5', .25], ['C6', 1], ['A5', 1], ['F5', 1], ['E5', 1], ['D5', 2.5],
   ['A#5', .75], ['A#5', .25], ['A5', 1], ['F5', 1], ['G5', 1], ['F5', 2.5],
 ];
+const CHORDS = {                            // 和弦 Voicing (中低音区, 避开旋律)
+  F:  ['F3', 'A3', 'C4'],
+  C7: ['C3', 'G3', 'A#3', 'E4'],
+  Bb: ['A#2', 'F3', 'A#3', 'D4'],
+  Fc: ['C3', 'F3', 'A3']
+};
+const PROG = [                              // [起点拍, 时值拍, 和弦] · I-V7-IV-I 终止式
+  [0, 4, 'F'], [4, 2, 'C7'],
+  [6, 3, 'C7'], [9, 3, 'F'],
+  [12, 4, 'F'], [16, 3.5, 'Bb'],
+  [19.5, 2, 'Bb'], [21.5, 1, 'Fc'], [22.5, 1, 'C7'], [23.5, 3.5, 'F']
+];
 function initAudio() {
   ac = new (window.AudioContext || window.webkitAudioContext)();
   master = ac.createGain(); master.gain.value = 0;
   const dry = ac.createGain(); dry.gain.value = .8;
   master.connect(dry); dry.connect(ac.destination);
-  const delay = ac.createDelay(1); delay.delayTime.value = .34;   // 山谷回声般的余韵
-  const fb = ac.createGain(); fb.gain.value = .32;
-  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
-  const wet = ac.createGain(); wet.gain.value = .4;
+  const delay = ac.createDelay(1); delay.delayTime.value = .42;   // 山谷回声般的余韵
+  const fb = ac.createGain(); fb.gain.value = .34;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+  const wet = ac.createGain(); wet.gain.value = .45;
   master.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay);
   lp.connect(wet); wet.connect(ac.destination);
 }
-function pluck(f, t, vel) {                 // 音盒拨片: 正弦基频 + 3倍频泛音, 快起慢落
-  const g = ac.createGain(), g2 = ac.createGain();
-  const o = ac.createOscillator(), o2 = ac.createOscillator();
+function pluck(ctx, out, f, t, vel) {       // 音盒拨片: 正弦基频 + 3倍频泛音, 快起慢落
+  const g = ctx.createGain(), g2 = ctx.createGain();
+  const o = ctx.createOscillator(), o2 = ctx.createOscillator();
   o.type = 'sine'; o.frequency.value = f;
   o2.type = 'sine'; o2.frequency.value = f * 3.02;
   g.gain.setValueAtTime(0, t);
@@ -600,20 +612,55 @@ function pluck(f, t, vel) {                 // 音盒拨片: 正弦基频 + 3倍
   g2.gain.setValueAtTime(0, t);
   g2.gain.linearRampToValueAtTime(vel * .14, t + .004);
   g2.gain.exponentialRampToValueAtTime(.0001, t + .5);
-  o.connect(g); g.connect(master);
-  o2.connect(g2); g2.connect(master);
+  o.connect(g); g.connect(out);
+  o2.connect(g2); g2.connect(out);
   o.start(t); o.stop(t + 2); o2.start(t); o2.stop(t + .6);
 }
-function scheduleLoop(start) {
+function pad(ctx, out, f, t, dur) {         // 柔弦铺底: 双三角波微失谐 + 低通, 慢起慢落
+  const g = ctx.createGain(), flt = ctx.createBiquadFilter();
+  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+  o1.type = 'triangle'; o2.type = 'triangle';
+  o1.frequency.value = f; o2.frequency.value = f * 1.003;   // 轻微合唱感
+  flt.type = 'lowpass'; flt.frequency.value = 850;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(.038, t + Math.min(.9, dur * .45));
+  g.gain.setValueAtTime(.038, t + dur);
+  g.gain.linearRampToValueAtTime(0, t + dur + 1.3);
+  o1.connect(g); o2.connect(g); g.connect(flt); flt.connect(out);
+  o1.start(t); o2.start(t);
+  o1.stop(t + dur + 1.4); o2.stop(t + dur + 1.4);
+}
+function bass(ctx, out, f, t) {             // 低音根音: 柔和正弦, 给和声扎根
+  const g = ctx.createGain();
+  const o = ctx.createOscillator();
+  o.type = 'sine'; o.frequency.value = f;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(.085, t + .04);
+  g.gain.exponentialRampToValueAtTime(.0001, t + 2.4);
+  o.connect(g); g.connect(out);
+  o.start(t); o.stop(t + 2.5);
+}
+function scheduleLoop(ctx, out, start) {
   let t = start;
   for (const [n, b] of SEQ) {
-    if (n) pluck(noteFreq(n), t, +n.slice(-1) >= 5 ? .17 : .15);
+    if (n) pluck(ctx, out, noteFreq(n), t, +n.slice(-1) >= 5 ? .17 : .15);
     t += b * BEAT;
+  }
+  for (const [bt, dur, name] of PROG) {
+    const cs = start + bt * BEAT, cd = dur * BEAT;
+    const notes = CHORDS[name].map(noteFreq);
+    notes.forEach(f => pad(ctx, out, f, cs, cd));             // 弦垫
+    bass(ctx, out, notes[0] / 2, cs);                         // 根音低音
+    const eighth = BEAT / 2;                                  // 竖琴琶音: 八分音符轮流织体
+    const pat = notes.length === 4 ? [0, 1, 2, 3, 2, 1, 2, 3] : [0, 1, 2, 1, 2, 1, 2, 1];
+    for (let k = 0; k * eighth < cd - .01; k++) {
+      pluck(ctx, out, notes[pat[k % pat.length]] * 2, cs + k * eighth, .045);
+    }
   }
   return t + BEAT * 2;
 }
 function pump() {
-  while (loopEnd < ac.currentTime + 1.4) loopEnd = scheduleLoop(Math.max(loopEnd, ac.currentTime + .08));
+  while (loopEnd < ac.currentTime + 1.4) loopEnd = scheduleLoop(ac, master, Math.max(loopEnd, ac.currentTime + .08));
 }
 document.getElementById('music').addEventListener('click', e => {
   e.stopPropagation();
