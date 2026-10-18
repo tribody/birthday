@@ -248,8 +248,82 @@ body{
     <div class="g-hint" id="g-hint">八位数字 · 只属于我们俩</div>
   </div>
 </div>
-<script>/* 已解锁会话: 首屏前就藏起密码门, 不等 6.5MB 解析完 */
-try { if (sessionStorage.getItem('lt-gate') === '1') { var _g = document.getElementById('gate'); if (_g) _g.style.display = 'none'; } } catch (e) {}</script>
+<script>
+/* 已解锁会话: 立即藏起密码门 */
+try { if (sessionStorage.getItem('lt-gate') === '1') { var _g = document.getElementById('gate'); if (_g) _g.style.display = 'none'; } } catch (e) {}
+/* 密码门逻辑内联: 首屏渲染即可校验, 不等 6.5MB 照片解析完 */
+/* ================= 密码门 (加盐 SHA-256, 源码不含明文) ================= */
+function sha256(ascii) {                    // 紧凑实现, 纯同步, 任何环境可用
+  function rr(v, a) { return (v >>> a) | (v << (32 - a)); }
+  var maxWord = Math.pow(2, 32), result = '', words = [], i, j;
+  var bitLen = ascii.length * 8;
+  var hash = sha256.h = sha256.h || [], k = sha256.k = sha256.k || [];
+  var primeCounter = k.length, isComposite = {};
+  for (var cand = 2; primeCounter < 64; cand++) {
+    if (!isComposite[cand]) {
+      for (i = 0; i < 313; i += cand) isComposite[i] = cand;
+      hash[primeCounter] = (Math.pow(cand, .5) * maxWord) | 0;
+      k[primeCounter++] = (Math.pow(cand, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii.length % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii.length; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return '';
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words.length] = ((bitLen / maxWord) | 0);
+  words[words.length] = (bitLen);
+  for (j = 0; j < words.length;) {
+    var w = words.slice(j, j += 16), oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      var i15 = i - 15, i2 = i - 2;
+      var a = hash[0], e = hash[4];
+      var t1 = hash[7] + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25))
+        + ((e & hash[5]) ^ ((~e) & hash[6])) + k[i]
+        + (w[i] = (i < 16) ? w[i] : (
+            w[i - 16] + (rr(w[i15], 7) ^ rr(w[i15], 18) ^ (w[i15] >>> 3))
+            + w[i - 7] + (rr(w[i2], 17) ^ rr(w[i2], 19) ^ (w[i2] >>> 10))) | 0);
+      var t2 = (rr(a, 2) ^ rr(a, 13) ^ rr(a, 22))
+        + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash = [(t1 + t2) | 0].concat(hash);
+      hash[4] = (hash[4] + t1) | 0;
+    }
+    for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+  }
+  for (i = 0; i < 8; i++)
+    for (j = 3; j + 1; j--) {
+      var b = (hash[i] >> (j * 8)) & 255;
+      result += ((b < 16) ? 0 : '') + b.toString(16);
+    }
+  return result;
+}
+const GATE_HASH = 'ac3957d5e99da536691f3d4ab2ea4146dfa7e6f4d28644623cc62658f8227ffc';
+const GATE_SALT = 'litong::';
+const gate = document.getElementById('gate'), gIn = document.getElementById('g-in'),
+      gHint = document.getElementById('g-hint');
+function tryUnlock() {
+  if (sha256(GATE_SALT + gIn.value.trim()) === GATE_HASH) {
+    try { sessionStorage.setItem('lt-gate', '1'); } catch (e) {}
+    gHint.textContent = '正在展开我们的回忆…';
+    gHint.style.color = 'var(--accent)';
+    document.getElementById('g-btn').disabled = true;
+    gate.classList.add('off');
+    setTimeout(() => gate.remove(), 1000);
+  } else {
+    gate.classList.remove('err'); void gate.offsetWidth;   // 重启抖动动画
+    gate.classList.add('err');
+    gHint.textContent = '不对哦，再想想那个日子';
+    gIn.select();
+  }
+}
+document.getElementById('g-btn').addEventListener('click', tryUnlock);
+gIn.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+if (sessionStorage.getItem('lt-gate') === '1') { gate.classList.add('off'); setTimeout(() => gate.remove(), 1000); }
+
+</script>
 
 <div class="eyebrow">To Li Tong &middot; With All My Love</div>
 
@@ -447,74 +521,6 @@ function openLb(ev, i) {
 function closeLb(ev) { ev.stopPropagation(); document.getElementById('lb').classList.remove('show'); }
 document.getElementById('lb').onclick = () => document.getElementById('lb').classList.remove('show');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('lb').classList.remove('show'); });
-
-/* ================= 密码门 (加盐 SHA-256, 源码不含明文) ================= */
-function sha256(ascii) {                    // 紧凑实现, 纯同步, 任何环境可用
-  function rr(v, a) { return (v >>> a) | (v << (32 - a)); }
-  var maxWord = Math.pow(2, 32), result = '', words = [], i, j;
-  var bitLen = ascii.length * 8;
-  var hash = sha256.h = sha256.h || [], k = sha256.k = sha256.k || [];
-  var primeCounter = k.length, isComposite = {};
-  for (var cand = 2; primeCounter < 64; cand++) {
-    if (!isComposite[cand]) {
-      for (i = 0; i < 313; i += cand) isComposite[i] = cand;
-      hash[primeCounter] = (Math.pow(cand, .5) * maxWord) | 0;
-      k[primeCounter++] = (Math.pow(cand, 1 / 3) * maxWord) | 0;
-    }
-  }
-  ascii += '\x80';
-  while (ascii.length % 64 - 56) ascii += '\x00';
-  for (i = 0; i < ascii.length; i++) {
-    j = ascii.charCodeAt(i);
-    if (j >> 8) return '';
-    words[i >> 2] |= j << ((3 - i) % 4) * 8;
-  }
-  words[words.length] = ((bitLen / maxWord) | 0);
-  words[words.length] = (bitLen);
-  for (j = 0; j < words.length;) {
-    var w = words.slice(j, j += 16), oldHash = hash;
-    hash = hash.slice(0, 8);
-    for (i = 0; i < 64; i++) {
-      var i15 = i - 15, i2 = i - 2;
-      var a = hash[0], e = hash[4];
-      var t1 = hash[7] + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25))
-        + ((e & hash[5]) ^ ((~e) & hash[6])) + k[i]
-        + (w[i] = (i < 16) ? w[i] : (
-            w[i - 16] + (rr(w[i15], 7) ^ rr(w[i15], 18) ^ (w[i15] >>> 3))
-            + w[i - 7] + (rr(w[i2], 17) ^ rr(w[i2], 19) ^ (w[i2] >>> 10))) | 0);
-      var t2 = (rr(a, 2) ^ rr(a, 13) ^ rr(a, 22))
-        + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
-      hash = [(t1 + t2) | 0].concat(hash);
-      hash[4] = (hash[4] + t1) | 0;
-    }
-    for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
-  }
-  for (i = 0; i < 8; i++)
-    for (j = 3; j + 1; j--) {
-      var b = (hash[i] >> (j * 8)) & 255;
-      result += ((b < 16) ? 0 : '') + b.toString(16);
-    }
-  return result;
-}
-const GATE_HASH = 'ac3957d5e99da536691f3d4ab2ea4146dfa7e6f4d28644623cc62658f8227ffc';
-const GATE_SALT = 'litong::';
-const gate = document.getElementById('gate'), gIn = document.getElementById('g-in'),
-      gHint = document.getElementById('g-hint');
-function tryUnlock() {
-  if (sha256(GATE_SALT + gIn.value.trim()) === GATE_HASH) {
-    try { sessionStorage.setItem('lt-gate', '1'); } catch (e) {}
-    gate.classList.add('off');
-    setTimeout(() => gate.remove(), 1000);
-  } else {
-    gate.classList.remove('err'); void gate.offsetWidth;   // 重启抖动动画
-    gate.classList.add('err');
-    gHint.textContent = '不对哦，再想想那个日子';
-    gIn.select();
-  }
-}
-document.getElementById('g-btn').addEventListener('click', tryUnlock);
-gIn.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-if (sessionStorage.getItem('lt-gate') === '1') { gate.classList.add('off'); setTimeout(() => gate.remove(), 1000); }
 
 /* ================= 倒计时 ================= */
 const qs = new URLSearchParams(location.search);
