@@ -18,6 +18,11 @@ body{
   min-height:100vh; overflow-x:hidden;
   -webkit-font-smoothing:antialiased;
 }
+/* ---------- 布局顺序: DOM 中 count 提前(早渲染), 用 order 恢复视觉 ---------- */
+.eyebrow{order:1}
+.heart-stage{order:2}
+.count{order:3}
+.words{order:4}
 /* ---------- 顶部英文小标签 ---------- */
 .eyebrow{
   font-family:Georgia,'Times New Roman',serif; font-style:italic;
@@ -325,6 +330,54 @@ if (sessionStorage.getItem('lt-gate') === '1') { gate.classList.add('off'); setT
 
 </script>
 
+<div class="count" id="count">
+  <div class="count-cap" id="cd-cap">To the midnight of 10 . 20</div>
+  <div class="count-row">
+    <div class="cu"><span class="cn" id="cd-d">--</span><span class="cl">天</span></div>
+    <span class="csep"></span>
+    <div class="cu"><span class="cn" id="cd-h">--</span><span class="cl">时</span></div>
+    <span class="csep"></span>
+    <div class="cu"><span class="cn" id="cd-m">--</span><span class="cl">分</span></div>
+    <span class="csep"></span>
+    <div class="cu"><span class="cn" id="cd-s">--</span><span class="cl">秒</span></div>
+  </div>
+</div>
+
+<script>/* ================= 倒计时 (内联: 首屏即走, 不等 6.5MB 照片解析) ================= */
+/* ================= 倒计时 ================= */
+const qs = new URLSearchParams(location.search);
+let TARGET;
+if (qs.has('demo')) {                       // 预览烟花用: ?demo=instant 立即触发 / ?demo 2.5秒后触发
+  TARGET = (qs.get('demo') === 'instant') ? Date.now() : Date.now() + 2500;
+} else {
+  const now = new Date(), y = now.getFullYear();
+  let t = new Date(y, 9, 20, 0, 0, 0);      // 10月20日零点
+  if (now >= new Date(y, 9, 21)) t = new Date(y + 1, 9, 20, 0, 0, 0);
+  TARGET = t.getTime();
+}
+const cdEls = {
+  d: document.getElementById('cd-d'), h: document.getElementById('cd-h'),
+  m: document.getElementById('cd-m'), s: document.getElementById('cd-s')
+};
+const countBox = document.getElementById('count'), cdCap = document.getElementById('cd-cap');
+let celebrated = false;
+function tick() {
+  let r = Math.max(TARGET - Date.now(), 0);
+  cdEls.d.textContent = String(Math.floor(r / 86400000)).padStart(2, '0');
+  cdEls.h.textContent = String(Math.floor(r / 3600000) % 24).padStart(2, '0');
+  cdEls.m.textContent = String(Math.floor(r / 60000) % 60).padStart(2, '0');
+  cdEls.s.textContent = String(Math.floor(r / 1000) % 60).padStart(2, '0');
+  if (r === 0 && !celebrated) {
+    celebrated = true;
+    countBox.classList.add('today');
+    cdCap.textContent = 'Today is the day';
+    setTimeout(function kick() {   // 烟花引擎在页尾脚本, 未就位则轮询等待
+    if (typeof startFireworks === 'function') startFireworks(); else setTimeout(kick, 300);
+  }, 60);
+  }
+}
+tick(); setInterval(tick, 250);</script>
+
 <div class="eyebrow">To Li Tong &middot; With All My Love</div>
 
 <div class="heart-stage">
@@ -459,19 +512,6 @@ if (sessionStorage.getItem('lt-gate') === '1') { gate.classList.add('off'); setT
   </div>
 </div>
 
-<div class="count" id="count">
-  <div class="count-cap" id="cd-cap">To the midnight of 10 . 20</div>
-  <div class="count-row">
-    <div class="cu"><span class="cn" id="cd-d">--</span><span class="cl">天</span></div>
-    <span class="csep"></span>
-    <div class="cu"><span class="cn" id="cd-h">--</span><span class="cl">时</span></div>
-    <span class="csep"></span>
-    <div class="cu"><span class="cn" id="cd-m">--</span><span class="cl">分</span></div>
-    <span class="csep"></span>
-    <div class="cu"><span class="cn" id="cd-s">--</span><span class="cl">秒</span></div>
-  </div>
-</div>
-
 <div class="words">
   <div class="en">Happy Birthday</div>
   <h1><span class="name">李彤</span>，生日快乐</h1>
@@ -522,37 +562,6 @@ function closeLb(ev) { ev.stopPropagation(); document.getElementById('lb').class
 document.getElementById('lb').onclick = () => document.getElementById('lb').classList.remove('show');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('lb').classList.remove('show'); });
 
-/* ================= 倒计时 ================= */
-const qs = new URLSearchParams(location.search);
-let TARGET;
-if (qs.has('demo')) {                       // 预览烟花用: ?demo=instant 立即触发 / ?demo 2.5秒后触发
-  TARGET = (qs.get('demo') === 'instant') ? Date.now() : Date.now() + 2500;
-} else {
-  const now = new Date(), y = now.getFullYear();
-  let t = new Date(y, 9, 20, 0, 0, 0);      // 10月20日零点
-  if (now >= new Date(y, 9, 21)) t = new Date(y + 1, 9, 20, 0, 0, 0);
-  TARGET = t.getTime();
-}
-const cdEls = {
-  d: document.getElementById('cd-d'), h: document.getElementById('cd-h'),
-  m: document.getElementById('cd-m'), s: document.getElementById('cd-s')
-};
-const countBox = document.getElementById('count'), cdCap = document.getElementById('cd-cap');
-let celebrated = false;
-function tick() {
-  let r = Math.max(TARGET - Date.now(), 0);
-  cdEls.d.textContent = String(Math.floor(r / 86400000)).padStart(2, '0');
-  cdEls.h.textContent = String(Math.floor(r / 3600000) % 24).padStart(2, '0');
-  cdEls.m.textContent = String(Math.floor(r / 60000) % 60).padStart(2, '0');
-  cdEls.s.textContent = String(Math.floor(r / 1000) % 60).padStart(2, '0');
-  if (r === 0 && !celebrated) {
-    celebrated = true;
-    countBox.classList.add('today');
-    cdCap.textContent = 'Today is the day';
-    setTimeout(startFireworks, 60);   // 延迟到脚本求值完成后, 规避下方 const 的 TDZ
-  }
-}
-tick(); setInterval(tick, 250);
 
 /* ================= 背景音乐: 八音盒版生日歌 (Web Audio 合成, 零外部请求) ================= */
 let ac = null, master = null, musicOn = false, loopEnd = 0, musicTimer = null;
